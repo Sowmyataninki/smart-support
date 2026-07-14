@@ -1,0 +1,66 @@
+# Import CSV Data to MongoDB Atlas
+
+We need to import the data from `customer_support_tickets_200k.csv` (located in the root directory) into MongoDB Atlas. The backend app connects to Atlas if the `MONGODB_URI` environment variable is defined. We will create a robust standalone import script in the backend directory that parses the CSV file, maps the CSV schema to the Mongoose Ticket schema, batches the inserts for high performance, and allows configuration of the import limit and clearing of the database.
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Data Size & MongoDB Atlas Free Tier Limitations**
+> The CSV file contains **200,000 tickets** (~73.8 MB). 
+> - A free-tier MongoDB Atlas cluster (M0) typically has a storage limit of **512 MB**.
+> - Importing all 200,000 tickets (including indexing and metadata) might get close to or exceed the storage quota and could impact performance.
+> - Therefore, our import script will include a **default limit of 1,000 tickets** to prevent exceeding Atlas's quotas, but will support command-line arguments to import more or the entire dataset if you wish.
+
+> [!WARNING]
+> **Gemini API Embeddings During Import**
+> - Generating text embeddings via Gemini API for all 200,000 tickets is not feasible due to API rate limits and quota.
+> - The import script will set the `embedding` array field to empty `[]`.
+> - The application is designed to generate and cache embeddings on the fly if they are missing (e.g. when an agent views a ticket and requests suggestions), so the core application logic remains fully functional.
+
+## Open Questions
+
+There are no blocking open questions. We will use the following default field mappings:
+- **Title**: Constructed as `${category} Ticket #${ticket_id} (${product})`.
+- **Category**: Mapped from the CSV's 10 categories to the Mongoose Schema's 3 enums (`Billing`, `Technical`, `Feature Request`).
+- **Priority**: Mapped from `Urgent` -> `High`, `High`/`Medium`/`Low` -> corresponding schema values.
+- **Status**: Mapped from `Closed`/`Resolved` -> `Resolved`, `In Progress`/`Pending Customer` -> `In Progress`, `Open` -> `Open`.
+- **Messages**: 
+  - A customer message containing the `issue_description` is added.
+  - If the ticket is resolved, an agent message containing the `resolution_notes` is added.
+- **Summary**: A short summary will be auto-generated during import containing the customer's name, email, product, and channel.
+
+---
+
+## Proposed Changes
+
+### Backend Database Import Script
+
+We will create a standalone script to run the import.
+
+#### [NEW] [import-csv.js](file:///d:/vs%20codes/project%201/backend/import-csv.js)
+A utility script that will:
+1. Load credentials from `backend/.env`.
+2. Connect to MongoDB Atlas.
+3. Stream the CSV file from the root directory using `csv-parser` to save memory.
+4. Process rows in batches (default size 500) and map them to Mongoose Schema requirements.
+5. Insert documents using Mongoose `insertMany`.
+6. Support arguments like `--limit <number>` (default: 1000) and `--clear` (to clear the collection before importing).
+
+---
+
+## Verification Plan
+
+### Automated Tests
+We will verify the script by running it with various flags and checking MongoDB connections.
+
+1. Test parsing and dry-run database insertion limit of 5:
+   ```bash
+   node import-csv.js --limit 5
+   ```
+2. Test clear and import limit of 10:
+   ```bash
+   node import-csv.js --clear --limit 10
+   ```
+
+### Manual Verification
+- We will verify using MongoDB Atlas GUI (or by checking the Dashboard UI in the frontend) that the 10 or 1,000 tickets successfully display, showing correct titles, statuses, categories, and message threads.
