@@ -2,6 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { db } from './db.js';
 import { hashPassword, verifyPassword } from './utils/auth.js';
 import { triageTicket, getEmbedding, generateDraftResponse, generateHandoffSummary } from './services/geminiService.js';
@@ -128,6 +133,14 @@ app.use('/api/tickets', ticketRoutes);
 app.use('/api/articles', knowledgeBaseRoutes);
 app.use('/api/resolved', resolvedTicketRoutes);
 app.use('/api/analytics', analyticsRoutes);
+
+// Serve frontend static files in production
+const frontendDistPath = path.join(__dirname, '../../frontend/dist');
+app.use(express.static(frontendDistPath));
+
+app.get('*', (req, res) => {
+  res.sendFile(path.join(frontendDistPath, 'index.html'));
+});
 
 // Start Express Server
 app.listen(PORT, () => {

@@ -33,7 +33,7 @@ import './App.css';
 import Login from './pages/Login';
 import Register from './pages/Register';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE = import.meta.env.MODE === 'development' ? 'http://localhost:5000/api' : '/api';
 
 function App() {
   // User Authentication State
